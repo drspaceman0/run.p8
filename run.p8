@@ -3,51 +3,74 @@ version 27
 __lua__
 --- init
 
-function _init()
+-- states
+state=0
+st_intro=0
+st_room1=1
+st_room2=2
+st_room3=3
+st_locker=4
+st_win=5
+st_gameover=-1
 
-end
+-- inventory vals
+inv=0
+empty=0
+stick=1
+dog=2
+knife=3
 
+-- action vals
+actions={}
 
--->8
---- updates
--- timer
-_t=0
-_f=0
-_fs=12
--- screen shake
-_offset=0.2 -- intensity
-_fade=0.75-- duration
--- enemy values
-_mask_d=20--distance of mask
-function _update()
- _t+=1
- if(_t%_fs==0)then
-  _f+=1
+-- enemy vals
+e_prog=0
+e_prog_max=100--gameover cond.
+e_prog_hb_mod=10-- up hbartb. 
+e_active=false
+
+-- heartbeat vals
+hb={1,3,2,0,1,0,2,0,3} --base
+ity=0 --intensity
+
+-- input
+_l=0
+_r=0
+_u=0
+_d=0
+_z=0
+_x=0
+
+function _init()  
+ debug=true
+ state=st_intro
+ inv=empty
+ if debug then
+  set_state(st_room1)
  end
 end
--->8
---- draw
--- screen size: 128x128
--- sprite size: 8x8
--- mask: 32x32
 
-function _draw()
- if _t%2==0 then
-  cls()
+
+
+-- misc vals, possib. unused
+
+arrow_center={x=64,
+
+arrow_x={95,85,75,85}
+arrow_y={85,95,85,75}
+
+act_room1={"",
+"look at\npeephole",
+"grab\nstick",
+"next\nroom"
+}
+
+--r,d,l,u
+-- these are offsets
+act_room1_x={0,-14,-22,-7}
+act_room1_y={0,3,-5,-14}
  
-	 --screen_shake()
-	 f= 0 + (_f%3)*4
-	 spr(f,48,48,4,4)
-	 
-	 footstep(4)
-	 ui()
-	end
-end
 
-function ui()
- fillp(0)
- rect(0,0,127,127,6)
-end
 
 --fill bytes ordered by fullness
 _fill_byte={
@@ -69,57 +92,252 @@ _fill_byte={
 0b1111111111110111,
 0b1111111111111111
 }
- 
 
-function footstep(r) 
- local row=0
- local y=0 
- 
- for i=1,r do 
-  y1=127-(i*4)
-	 y2=y1+4
-	 
-	 c=i%16
-	 
-	 r=0.8
-	 for j=0,127,4 do
-	  
-   x1=j
-   x2=j+4
-   if rnd(1)*i < r then
-    b=4*(i)-flr(rnd(4)) 
-   else 
-    -- fade effect
-    if i>3 then
-     b=16
-    else 
-     b=4*(i+1)-flr(rnd(4)) 
-    end
-    
-    b=4*(i)-flr(rnd(4))
-   end
-   
-   if b > 12 then
-    local a=flr(rnd(4))
-    if a==0 then
-     b=17 
-    else
-     b=17
-    end
-   end
-   
-   fillp(_fill_byte[b])
-	  rectfill(x1,y1,x2,y2,8)
- 	 
-	 end
-	 
---	 rectfill(1,y1,126,y2,8)
+_chars={
+"\x80",
+"\x81",
+"\x82",
+"\x83",
+"\x84",
+"\x85",
+"\x86",
+"\x87",
+"\x88",
+"\x89",
+"\x90",
+"\x91",
+"\x92",
+"\x93",
+"\x94",
+"\x95",
+"\x96",
+"\x97",
+"\x98",
+"\x99"
+}
+-->8
+--- updates
+
+
+-- timers
+_t=0 -- total timer
+_d_t=0 -- draw timer
+_ds=4 -- draw speed 
+_tt=0 -- wait timer
+_tt_max=0 -- wait timer max
+_st_t=0--
+-- screen shake
+_offset=0.2 -- intensity
+_fade=0.75-- duration
+
+function _update()
+ get_input() --player input
+ upd_state() --update states
+ upd_timers() --update timers
+end 
+
+function upd_state()
+ local s=state
+ if     s==st_intro then intro()
+ elseif s==st_gameover then gameover()
+ elseif s==st_room1 then room1()
+ elseif s==st_room2 then room2()
+ elseif s==st_room3 then room3()
+ elseif s==st_locker then locker()
+ elseif s==st_win then win()
+ else error("invalid state")
+ end 
+end
+
+function set_state(s)
+ state=s
+ set_actions()
+ reset_wait()
+ resest_draw_state()
+end
+
+intro_max=100
+function intro()
+ if _t>=intro_max then
+  set_state(st_room1)
+  e_active=true
  end
 end
 
--- change offset var to control
-function screen_shake()
-  local fade = _fade
+function room1()
+ 
+end
+
+
+--
+-- player actions 
+function set_actions()
+ local s=state
+ if s==st_room1 then
+  actions=act_room1
+ end
+end
+
+--
+-- input functions
+function get_input()
+ _l=btnp(0)
+	_r=btnp(1)
+	_u=btnp(2)
+	_d=btnp(3)
+	_z=btnp(4)
+	_x=btnp(5)
+end 
+
+
+--
+-- timer functions
+function upd_timers()
+ _t+=1
+ if(_t%_ds==0)then
+  _d_t+=1 
+ end
+ if is_wait() then
+  upd_wait()
+ end
+end
+
+function upd_wait()
+ if _tt>=_tt_max then
+  _tt=0
+  _tt_max=0
+ end
+ _tt+=1
+end
+
+function wait(w)
+ if is_wait() then
+  error("wait timer already set")
+ end
+ _tt=0
+ _tt_max=w 
+end
+
+function is_wait()
+ return _tt_max!=0
+end
+
+function reset_wait()
+ _tt_max=0
+end
+-->8
+--- draw
+
+
+function _draw()  
+	 cls()
+	 if debug then
+	  d_debug_input()
+	  d_timer()
+	  d_debug_drawing()
+	 end
+	 --screen_shake()
+	 
+	  
+	 --show_footsteps(_sines[1])
+	 
+	 draw_state()  
+	 if is_shake()then
+	  screen_shake()
+	 end
+end
+
+function draw_state()
+ local s=state
+ if s==st_intro then d_intro() 
+ elseif s==st_room1 then d_room1()
+    
+ --other states here
+ end
+end
+
+
+--
+-- state stuff
+function d_intro()
+ print("its coming!",42,64,7)
+ if not is_shake() 
+ and not is_wait() then
+  start_screen_shake(0.1)
+  wait(30) 
+ end
+end 
+
+function d_room1()
+ 
+ ui()
+end
+
+go_t=0
+function d_gameover()
+ go_t+=1--upd timer
+ f= 0 + (_f%3)*4
+	spr(f,48,48,4,4)
+end
+ 
+ 
+--
+-- draw ui
+function ui() 
+ fillp(0)
+ rect(0,0,127,127,6)
+ d_actions()
+end
+
+
+
+function d_actions()
+ -- make a function for this 
+ -- later
+ local act_s=act_room1
+ local act_x=act_room1_x
+ local act_y=act_room1_y
+ local c=7
+ line(arrow_x[1],
+      arrow_y[1],
+      arrow_x[3],
+      arrow_y[3],c)
+      
+ line(arrow_x[2],
+      arrow_y[2],
+      arrow_x[4],
+      arrow_y[4],c)
+ 
+ local x=0
+ local y=0
+ local s=""
+ for i=1,4 do
+  s=act_s[i]
+  x=arrow_x[i]+act_x[i]
+  y=arrow_y[i]+act_y[i] 
+  print(s,x,y,c) 
+ end
+ 
+-- print(actions[1],act_u_x,act_u_y,c)
+-- print(actions[2],act_r_x,act_r_y,c)
+-- print(actions[3],act_d_x,act_d_y,c)
+-- print(actions[4],act_l_x,act_l_y,c)
+end
+ 
+
+--
+-- screen shake stuff
+function is_shake()
+ return _offset!=0
+end
+ 
+_offset=0
+function start_screen_shake(o)
+ _offset=o
+end
+
+function screen_shake() 
+  local fade = 0.95
   local offset_x=16-rnd(32)
   local offset_y=16-rnd(32)
   offset_x*=_offset
@@ -128,10 +346,97 @@ function screen_shake()
   camera(offset_x,offset_y)
   _offset*=fade
   if _offset<0.05 then
-    _offset=0
-  end
+    reset_screen_shake()
+  end 
 end
+
+function reset_screen_shake()
+ _offset=0 
+ camera(0,0)
+end
+
+function resest_draw_state()
+ reset_screen_shake()
+end
+
+
+--origin=114 
+-- scale=16 
+--speed=12
+function init_sine_table()
+ local s={o=118,s=8,p=1.25}
+ add(_sines,s)
+ -- s={o=114,s=16,p=14}
+end 
  
+function show_footsteps(s)
+ origin=s.o
+ unit=128
+ scale=s.s
+ spd=s.p 
+ 
+ local max_y=100
+ clip(1,max_y,125,128-max_y-1)
+  
+ 
+ prev_y=0
+ for x=0,128,8 do
+  x1=(x+_t*spd)%128
+  
+  y1=(sin(x/unit)*cos(x/unit))*scale
+  y1=y1+origin
+  
+  if y1>120 then
+   y1=120
+  end 
+  
+  print("\x98", x1,y1,8)
+  prev_y=y1
+--  for y2=y1,128,12 do
+--   --print(_chars[-flr(rnd(19))%19], x1,y2,8)
+--   print("\x96", x1,y2,8)
+--  end 
+ end 
+end
+
+function footstep(r)  
+ for i=1,r do 
+  y1=127-(i*4)
+	 y2=y1+4 
+	 for j=0,127,4 do
+   x1=j
+   x2=j+4
+   b=4*(i)-flr(rnd(4)) 
+   if b > 12 then
+    b=17 
+   end
+   fillp(_fill_byte[b])
+	  rectfill(x1,y1,x2,y2,8) 
+	 end 
+ end
+end
+
+function d_debug_input()
+ local s=""
+ if _l then s=s.."\x8b" end
+ if _r then s=s.."\x91" end
+ if _u then s=s.."\x94" end
+ if _d then s=s.."\x83" end
+ if _z then s=s.."\x8e" end
+ if _x then s=s.."\x97" end
+ print(s,4,4,7) 
+end
+
+function d_timer()
+ print("timer:".._t,4,8,7)
+ print("wait time:".._tt,4,14,7)
+end
+
+function d_debug_drawing()
+ local s=""
+ if is_shake() then s="shake " end
+ print("drawing:"..s,4,20,7)
+end
 __gfx__
 00000022222222222222222222200000000000222222222222222222222000000000002222222222222222222220000000000000000000000000000000000000
 00000022222222222222222222200000000000222282222222222222222000000000002222822222222222222220000000000000000000000000000000000000
